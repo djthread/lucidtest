@@ -2,7 +2,7 @@ defmodule Lucidtest.UserSocket do
   use Phoenix.Socket
 
   ## Channels
-  channel "board:*", Lucidtest.BoardChannel
+  channel "board", Lucidtest.BoardChannel
 
   ## Transports
   transport :websocket, Phoenix.Transports.WebSocket

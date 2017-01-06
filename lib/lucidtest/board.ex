@@ -9,7 +9,8 @@ defmodule Lucidtest.Board do
   @name __MODULE__
   @card_options 5
 
-  @type board :: {String.t, list(integer)}
+  @type board :: [integer]
+  @type state :: {String.t, board}
 
   @spec start_link :: GenServer.on_start
   def start_link do
@@ -18,6 +19,7 @@ defmodule Lucidtest.Board do
 
   def state,               do: GenServer.call(@name, :state)
   def add_card(n),         do: GenServer.call(@name, {:add_card, n})
+  def add_random_card,     do: GenServer.call(@name, :add_random_card)
   def randomize_card(idx), do: GenServer.call(@name, {:randomize_card, idx})
 
   @spec init([]) :: {:ok, any}
@@ -38,16 +40,27 @@ defmodule Lucidtest.Board do
       |> Enum.concat([n])
       |> state_by_board
 
-    {:reply, {elem(state, 0), n}, state}
+    {:reply, %{hash: elem(state, 0), card: n}, state}
   end
 
   def handle_call({:add_card, bad_input}, _from, state) do
     {:reply, :noop, state}
   end
 
+  def handle_call(:add_random_card, _from, state) do
+    random_card = get_random_card
+
+    state =
+      state
+      |> elem(1)
+      |> Enum.concat([random_card])
+      |> state_by_board
+
+    {:reply, %{hash: elem(state, 0), card: random_card}, state}
+  end
+
   def handle_call({:randomize_card, idx}, _from, state) do
-    random_card =
-      Enum.random(1..@card_options)
+    random_card = get_random_card
 
     state =
       state
@@ -55,10 +68,10 @@ defmodule Lucidtest.Board do
       |> List.replace_at(idx, random_card)
       |> state_by_board
 
-    {:reply, {elem(state, 0), random_card}, state}
+    {:reply, %{hash: elem(state, 0), idx: idx, card: random_card}, state}
   end
 
-  @spec hash([integer]) :: String.t
+  @spec hash(board) :: String.t
   def hash(board) do
     serialized =
       Enum.reduce(board, "", fn(x, acc) ->
@@ -70,8 +83,13 @@ defmodule Lucidtest.Board do
     |> Base.encode64
   end
 
-  @spec state_by_board(board) :: board
+  @spec state_by_board(board) :: state
   def state_by_board(board) do
     {hash(board), board}
+  end
+
+  @spec get_random_card :: integer
+  def get_random_card do
+    Enum.random(1..@card_options)
   end
 end
