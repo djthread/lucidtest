@@ -4,7 +4,14 @@ defmodule Lucidtest.BoardChannel do
   require Logger
 
   def join("board", _junk, socket) do
+    send(self, :after_join)
+
     {:ok, socket}
+  end
+
+  def handle_info(:after_join, socket) do
+    push socket, "state", state
+    {:noreply, socket}
   end
 
   def handle_in("hash", _msg, socket) do
@@ -12,6 +19,7 @@ defmodule Lucidtest.BoardChannel do
   end
 
   def handle_in("state", _msg, socket) do
+    Logger.debug "state!"
     {:reply, {:ok, Board.state}, socket}
   end
 
@@ -44,5 +52,13 @@ defmodule Lucidtest.BoardChannel do
     unless msg == :noop do
       Lucidtest.Endpoint.broadcast!(topic, event, msg)
     end
+  end
+
+  defp state do
+    st = Board.state
+
+    %{hash:  elem(st, 0),
+      board: elem(st, 1)
+    }
   end
 end

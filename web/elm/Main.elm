@@ -7,7 +7,8 @@ import Phoenix.Socket
 import Phoenix.Channel
 import Phoenix.Push
 import Json.Encode as JE
-import Json.Decode as JD
+import Json.Decode exposing (Decoder, decodeValue, list, int, string)
+import Json.Decode.Pipeline exposing (decode, required, optional)
 
 
 -- MAIN
@@ -25,12 +26,16 @@ main =
 -- MODEL
 
 type Msg
-  = AddRandomCard
-  | ChangeCard
-  | ShowCardAdded Int String
-  | ShowCardChanged Int Int String
-  | PhoenixMsg (Phoenix.Socket.Msg Msg)
+  = PhoenixMsg (Phoenix.Socket.Msg Msg)
+
+  | Refresh
+  | AddRandomCard
+  -- | ChangeCard
+  -- | ShowCardChanged Int Int String
+
+  | ReceiveRefresh JE.Value
   | ReceiveAddRandomCard JE.Value
+
   | LogState
 
 type alias Card =
@@ -39,10 +44,12 @@ type alias Card =
 type alias ServerMessage =
   { hash    : String
   , card    : Int
+  , board   : (List Int)
   }
 
 type alias Model =
-  { board     : List Int
+  { hash      : String
+  , board     : List Int
   , phxSocket : Phoenix.Socket.Socket Msg
   }
 
@@ -55,10 +62,11 @@ init =
       Phoenix.Socket.init socketServer
       |> Phoenix.Socket.withDebug
       |> Phoenix.Socket.on "add_random_card" "board" ReceiveAddRandomCard
+      |> Phoenix.Socket.on "state" "board" ReceiveRefresh
     ( phxSocket, phxCmd ) =
       Phoenix.Socket.join channel initSocket
   in
-    ( Model [] phxSocket
+    ( Model "" [] phxSocket
     , Cmd.map PhoenixMsg phxCmd
     )
 
@@ -95,55 +103,72 @@ update msg model =
         , Cmd.map PhoenixMsg phxCmd
         )
 
+    Refresh ->
+      pushMessage "state" model
+
     AddRandomCard ->
-      let
-        push_ =
-          Phoenix.Push.init "add_random_card" "board"
-        ( phxSocket, phxCmd ) =
-          Phoenix.Socket.push push_ model.phxSocket
-      in
-        ( { model | phxSocket = phxSocket }
-        , Cmd.map PhoenixMsg phxCmd
-        )
+      pushMessage "add_random_card" model
 
-    ChangeCard ->
-      ( model, Cmd.none )
+    -- ChangeCard ->
+    --   ( model, Cmd.none )
 
-    ShowCardAdded num hash ->
-      ( model, Cmd.none )
+    -- ShowCardChanged idx num hash ->
+    --   ( model, Cmd.none )
 
-    ShowCardChanged idx num hash ->
-      ( model, Cmd.none )
-
-    ReceiveAddRandomCard raw ->
-      case JD.decodeValue serverMessageDecoder raw of
+    ReceiveRefresh raw ->
+      case decodeValue serverMessageDecoder raw of
         Ok serverMessage ->
-          let
-            board = serverMessage.card :: model.board
-          in
-            Debug.log ("winning: " ++ toString board)
-            ( { model
-              | board = board
-              }
-            , Cmd.none
-            )
+          ( { model
+            | hash = serverMessage.hash
+            , board = serverMessage.board
+            }
+          , Cmd.none
+          )
 
         Err error ->
-          Debug.log "losing"
+          ( model, Cmd.none )
+
+    ReceiveAddRandomCard raw ->
+      case decodeValue serverMessageDecoder raw of
+        Ok serverMessage ->
+          let
+            newBoard = serverMessage.card :: model.board
+          in
+            -- Debug.log ("winning: " ++ toString board)
+            ( { model | board = newBoard }, Cmd.none )
+
+        Err error ->
+          -- Debug.log "losing"
           ( model, Cmd.none )
 
     LogState ->
       Debug.log ("Board: " ++ (toString model.board))
       ( model, Cmd.none )
 
+pushMessage : String -> Model -> ( Model, Cmd Msg )
+pushMessage message model =
+  let
+    push_ =
+      Phoenix.Push.init "add_random_card" "board"
+    ( phxSocket, phxCmd ) =
+      Phoenix.Socket.push push_ model.phxSocket
+  in
+    ( { model | phxSocket = phxSocket }
+    , Cmd.map PhoenixMsg phxCmd
+    )
+
 
 -- DECODERS
 
-serverMessageDecoder : JD.Decoder ServerMessage
+serverMessageDecoder : Decoder ServerMessage
 serverMessageDecoder =
-  JD.map2 ServerMessage
-    (JD.at ["hash"] JD.string)
-    (JD.at ["card"] JD.int)
+  decode ServerMessage
+  |> required "hash" string
+  |> optional "card" int 0
+  |> optional "board" (list int) []
+  -- JD.map2 ServerMessage
+  --   (JD.at ["hash"] JD.string)
+  --   (JD.at ["card"] JD.int)
   
 
 -- VIEW
@@ -151,9 +176,9 @@ serverMessageDecoder =
 view : Model -> Html Msg
 view model = 
   div []
-    [ button [onClick AddRandomCard] [text "Add Card"]
+    [ button [onClick AddRandomCard] [text "Add Random Card"]
     , button [onClick LogState] [text "Log State"]
-    , ul [] (List.map renderCard model.board)
+    , ul [] ((List.reverse << List.map renderCard) model.board)
     ]
 
 renderCard : Card -> Html Msg
@@ -161,15 +186,15 @@ renderCard card =
   let
     color =
       case card of
-        1 -> "blue"
-        2 -> "red"
-        3 -> "yellow"
-        4 -> "green"
-        _ -> "orange"
+        1 -> "#66c"
+        2 -> "#c66"
+        3 -> "#6c6"
+        4 -> "#cc6"
+        _ -> "#6cc"
     cardstyle =
       [("background-color", color)]
     content =
-      [text "."]
+      [text " "]
   in
     li [class "card", (style cardstyle)] content
 
