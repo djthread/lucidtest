@@ -5,6 +5,7 @@ defmodule Lucidtest.Board do
   state, and the second is a list of integers.
   """
   use GenServer
+  require Logger
 
   @name __MODULE__
   @card_options 5
@@ -56,6 +57,8 @@ defmodule Lucidtest.Board do
       |> Enum.concat([random_card])
       |> state_by_board
 
+    Logger.debug "(#{length elem(state, 1)}) " <> (state |> elem(1) |> Enum.map(&to_string/1) |> Enum.join(" "))
+
     {:reply, %{hash: elem(state, 0), card: random_card}, state}
   end
 
@@ -77,10 +80,16 @@ defmodule Lucidtest.Board do
       Enum.reduce(board, "", fn(x, acc) ->
         acc <> Integer.to_string(x)
       end)
-    
-    :sha256
-    |> :crypto.hash(serialized)
-    |> Base.encode64
+
+    hash =
+      :md5  #:sha256
+      |> :crypto.hash(serialized)
+      |> Base.encode16
+      |> String.downcase
+
+    Logger.debug "tohash: \"#{serialized}\" -> #{hash}"
+
+    hash
   end
 
   @spec state_by_board(board) :: state

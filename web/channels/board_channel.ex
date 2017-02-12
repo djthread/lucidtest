@@ -19,8 +19,11 @@ defmodule Lucidtest.BoardChannel do
   end
 
   def handle_in("state", _msg, socket) do
-    Logger.debug "state!"
-    {:reply, {:ok, Board.state}, socket}
+    st = Board.state
+
+    Logger.debug "state! " <> inspect(st)
+
+    {:reply, {:ok, st}, socket}
   end
 
   def handle_in("add_card", n, socket) do
@@ -35,7 +38,7 @@ defmodule Lucidtest.BoardChannel do
     response = Board.add_random_card
 
     bc! "board", "add_random_card", response
-    Logger.debug "add_random_card!! " <> inspect(response)
+    Logger.debug "add_random_card!! #{inspect(response)}"
 
     {:reply, {:ok, response}, socket}
   end

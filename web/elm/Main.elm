@@ -1,6 +1,6 @@
 module Main exposing (..)
 
-import Html exposing (Html, div, text, button, ul, li)
+import Html exposing (Html, div, p, span, text, button, ul, li)
 import Html.Attributes exposing (class, style)
 import Html.Events exposing (onClick)
 import Phoenix.Socket
@@ -9,6 +9,7 @@ import Phoenix.Push
 import Json.Encode as JE
 import Json.Decode exposing (Decoder, decodeValue, list, int, string)
 import Json.Decode.Pipeline exposing (decode, required, optional)
+import MD5
 
 
 -- MAIN
@@ -132,9 +133,9 @@ update msg model =
       case decodeValue serverMessageDecoder raw of
         Ok serverMessage ->
           let
-            newBoard = serverMessage.card :: model.board
+            newBoard = model.board ++ [serverMessage.card]
           in
-            -- Debug.log ("winning: " ++ toString board)
+            -- Debug.log ("winning: " ++ toString newBoard)
             ( { model | board = newBoard }, Cmd.none )
 
         Err error ->
@@ -175,22 +176,45 @@ serverMessageDecoder =
 
 view : Model -> Html Msg
 view model = 
-  div []
-    [ button [onClick AddRandomCard] [text "Add Random Card"]
-    , button [onClick LogState] [text "Log State"]
-    , ul [] ((List.reverse << List.map renderCard) model.board)
-    ]
+  let
+    stringlist =
+      model.board
+      |> List.map toString
+      -- |> List.reverse
+    countlabel =
+      ["(", List.length stringlist |> toString, " cards)"]
+      |> String.join ""
+    boardstr =
+      stringlist
+      |> String.join " "
+    hash =
+      stringlist
+      |> String.join ""
+      |> Debug.log "tohash"
+      |> MD5.hex
+      |> Debug.log "hash"
+  in
+    div []
+      [ button [onClick AddRandomCard] [text "Add Random Card"]
+      , button [onClick LogState] [text "Log State"]
+      , text " "
+      , span [] [text countlabel]
+      , p [] [text boardstr]
+      , p [style [("font-family", "monospace")]] [text hash]
+      , ul [] (List.map renderCard stringlist)
+      -- , ul [] ((List.reverse << List.map renderCard) model.board)
+      ]
 
-renderCard : Card -> Html Msg
+renderCard : String -> Html Msg
 renderCard card =
   let
     color =
       case card of
-        1 -> "#66c"
-        2 -> "#c66"
-        3 -> "#6c6"
-        4 -> "#cc6"
-        _ -> "#6cc"
+        "1" -> "#66c"
+        "2" -> "#c66"
+        "3" -> "#6c6"
+        "4" -> "#cc6"
+        _   -> "#6cc"
     cardstyle =
       [("background-color", color)]
     content =
