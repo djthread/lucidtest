@@ -1,4 +1,4 @@
-module Main exposing (..)
+module Main exposing (main)
 
 import Html exposing (Html, div, p, span, text, button, ul, li)
 import Html.Attributes exposing (class, style)
@@ -28,15 +28,9 @@ main =
 
 type Msg
   = PhoenixMsg (Phoenix.Socket.Msg Msg)
-
-  | Refresh
   | AddRandomCard
-  -- | ChangeCard
-  -- | ShowCardChanged Int Int String
-
   | ReceiveRefresh JE.Value
   | ReceiveAddRandomCard JE.Value
-
   | LogState
 
 type alias Card =
@@ -104,17 +98,8 @@ update msg model =
         , Cmd.map PhoenixMsg phxCmd
         )
 
-    Refresh ->
-      pushMessage "state" model
-
     AddRandomCard ->
       pushMessage "add_random_card" model
-
-    -- ChangeCard ->
-    --   ( model, Cmd.none )
-
-    -- ShowCardChanged idx num hash ->
-    --   ( model, Cmd.none )
 
     ReceiveRefresh raw ->
       case decodeValue serverMessageDecoder raw of
@@ -146,11 +131,12 @@ update msg model =
       Debug.log ("Board: " ++ (toString model.board))
       ( model, Cmd.none )
 
+
 pushMessage : String -> Model -> ( Model, Cmd Msg )
 pushMessage message model =
   let
     push_ =
-      Phoenix.Push.init "add_random_card" "board"
+      Phoenix.Push.init message "board"
     ( phxSocket, phxCmd ) =
       Phoenix.Socket.push push_ model.phxSocket
   in
@@ -167,9 +153,6 @@ serverMessageDecoder =
   |> required "hash" string
   |> optional "card" int 0
   |> optional "board" (list int) []
-  -- JD.map2 ServerMessage
-  --   (JD.at ["hash"] JD.string)
-  --   (JD.at ["card"] JD.int)
   
 
 -- VIEW
@@ -178,9 +161,7 @@ view : Model -> Html Msg
 view model = 
   let
     stringlist =
-      model.board
-      |> List.map toString
-      -- |> List.reverse
+      List.map toString model.board
     countlabel =
       ["(", List.length stringlist |> toString, " cards)"]
       |> String.join ""
@@ -195,14 +176,13 @@ view model =
       |> Debug.log "hash"
   in
     div []
-      [ button [onClick AddRandomCard] [text "Add Random Card"]
-      , button [onClick LogState] [text "Log State"]
+      [ button [ onClick AddRandomCard ] [ text "Add Random Card" ]
+      , button [ onClick LogState ] [ text "Log State" ]
       , text " "
-      , span [] [text countlabel]
-      , p [] [text boardstr]
-      , p [style [("font-family", "monospace")]] [text hash]
+      , span [] [ text countlabel ]
+      , p [] [ text boardstr ]
+      , p [ style [ ( "font-family", "monospace" ) ] ] [ text hash ]
       , ul [] (List.map renderCard stringlist)
-      -- , ul [] ((List.reverse << List.map renderCard) model.board)
       ]
 
 renderCard : String -> Html Msg
@@ -216,9 +196,9 @@ renderCard card =
         "4" -> "#cc6"
         _   -> "#6cc"
     cardstyle =
-      [("background-color", color)]
+      [ ( "background-color", color ) ]
     content =
-      [text " "]
+      [ text " " ]
   in
-    li [class "card", (style cardstyle)] content
+    li [ class "card", style cardstyle ] content
 
