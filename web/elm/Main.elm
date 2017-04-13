@@ -3,9 +3,10 @@ module Main exposing (main)
 import Html exposing (Html, div, p, span, text, button, ul, li)
 import Html.Attributes exposing (class, style)
 import Html.Events exposing (onClick)
-import Phoenix.Socket
-import Phoenix.Channel
-import Phoenix.Push
+import Phoenix
+import Phoenix.Socket as Socket
+import Phoenix.Channel as Channel
+import Phoenix.Push as Push
 import Json.Encode as JE
 import Json.Decode exposing (Decoder, decodeValue, list, int, string)
 import Json.Decode.Pipeline exposing (decode, required, optional)
@@ -27,8 +28,7 @@ main =
 -- MODEL
 
 type Msg
-  = PhoenixMsg (Phoenix.Socket.Msg Msg)
-  | AddRandomCard
+  = AddRandomCard
   | ReceiveRefresh JE.Value
   | ReceiveAddRandomCard JE.Value
   | LogState
@@ -43,34 +43,30 @@ type alias ServerMessage =
   }
 
 type alias Model =
-  { hash      : String
-  , board     : List Int
-  , phxSocket : Phoenix.Socket.Socket Msg
+  { hash  : String
+  , board : List Int
   }
 
 init : ( Model, Cmd Msg )
 init =
-  let
-    channel =
-      Phoenix.Channel.init "board"
-    initSocket =
-      Phoenix.Socket.init socketServer
-      |> Phoenix.Socket.withDebug
-      |> Phoenix.Socket.on "add_random_card" "board" ReceiveAddRandomCard
-      |> Phoenix.Socket.on "state" "board" ReceiveRefresh
-    ( phxSocket, phxCmd ) =
-      Phoenix.Socket.join channel initSocket
-  in
-    ( Model "" [] phxSocket
-    , Cmd.map PhoenixMsg phxCmd
-    )
+  ( Model "" []
+  , Cmd.none
+  )
 
 
 -- SUBSCRIPTIONS
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  Phoenix.Socket.listen model.phxSocket PhoenixMsg
+  let
+    socket =
+      Socket.init socketServer
+    channel =
+      Channel.init "board"
+      |> Channel.on "add_random_card" ReceiveAddRandomCard
+      |> Channel.on "state" ReceiveRefresh
+  in
+    Phoenix.connect socket [channel]
 
 
 -- CONSTANTS
@@ -89,15 +85,6 @@ cardOptions =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
   case msg of
-    PhoenixMsg msg ->
-      let
-        ( phxSocket, phxCmd ) =
-          Phoenix.Socket.update msg model.phxSocket
-      in
-        ( { model | phxSocket = phxSocket }
-        , Cmd.map PhoenixMsg phxCmd
-        )
-
     AddRandomCard ->
       pushMessage "add_random_card" model
 
@@ -135,14 +122,16 @@ update msg model =
 pushMessage : String -> Model -> ( Model, Cmd Msg )
 pushMessage message model =
   let
-    push_ =
-      Phoenix.Push.init message "board"
-    ( phxSocket, phxCmd ) =
-      Phoenix.Socket.push push_ model.phxSocket
+    push =
+      Push.init "board" message
+    --   Phoenix.Push.init message "board"
+    -- ( phxSocket, phxCmd ) =
+    --   Phoenix.Socket.push push_ model.phxSocket
   in
-    ( { model | phxSocket = phxSocket }
-    , Cmd.map PhoenixMsg phxCmd
-    )
+    model ! [Phoenix.push socketServer push]
+    -- ( { model | phxSocket = phxSocket }
+    -- , Cmd.map PhoenixMsg phxCmd
+    -- )
 
 
 -- DECODERS
